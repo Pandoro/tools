@@ -49,13 +49,13 @@ class scale_augmentation(object):
         return im, ta
 
 class pca_color_augmentation(object):
-    def __init__(self, mu=0.1, color_axis=1, color_channels=[0,1,2]):
+    def __init__(self, sigma=0.1, color_axis=1, color_channels=[0,1,2]):
         '''
         color_axis represents the color_axis in the images when the augmentation is applied.
         This is not considered for the training step. The color_channels parameter is used
         in both cases though and should be consistent!
         '''
-        self.mu=mu
+        self.sigma=sigma
         self.color_axis=color_axis
         self.color_channels=color_channels
 
@@ -82,7 +82,7 @@ class pca_color_augmentation(object):
 
 
     def apply(self, image, semantic_image):
-        color_noise =np.dot(self.u, np.random.normal(0.0, self.mu, self.d)*self.ev)
+        color_noise =np.dot(self.u, np.random.normal(0.0, self.sigma, self.d)*self.ev)
         augmented = np.swapaxes(image, self.color_axis, -1).astype(np.float32).copy()
         augmented[..., self.color_channels] += color_noise
         augmented = np.swapaxes(augmented, self.color_axis, -1)
