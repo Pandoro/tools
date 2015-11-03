@@ -21,16 +21,36 @@ class Kitti(object):
         else:
             self.root_folder = ''
 
-        self.image_folder = os.path.join(self.root_folder, self.config['image_folder'])
-        self.image_extension = self.config['image_extension']
-        self.label_folder = os.path.join(self.root_folder, self.config['label_folder'])
-        self.label_extension = self.config['label_extension']
+        image_f = self.config['image_folder']
+        if image_f is not None:
+            self.image_folder = os.path.join(self.root_folder, image_f)
+            self.image_extension = self.config['image_extension']
+        else:
+            self.image_folder = None
+
+        label_f = self.config['label_folder']
+        if label_f is not None:
+            self.label_folder = os.path.join(self.root_folder, label_f)
+            self.label_extension = self.config['label_extension']
+        else:
+            self.label_folder = None
+
         calib_f = self.config.get('calibration_folder')
         if calib_f is not None:
             self.calibration_folder = os.path.join(self.root_folder, calib_f)
             self.calibration_extension = self.config.get('calibration_extension')
         else:
             self.calibration_folder = None
+
+
+        disparity_f = self.config.get('disparity_folder')
+        if disparity_f is not None:
+            self.disparity_folder = os.path.join(self.root_folder, disparity_f)
+            self.disparity_extension = self.config.get('disparity_extension')
+        else:
+            self.disparity_folder = None
+
+
         self.result_folder = os.path.join(self.root_folder, self.config['result_folder'])
 
         self.train_filenames = self.config['train_images']
@@ -60,7 +80,7 @@ class Kitti(object):
         return result
 
 
-    def get_data(self, data_type, color_images=True, label_images=True, calibrations=False):
+    def get_data(self, data_type, color_images=True, label_images=True, calibrations=False, disparity=False):
         file_list = []
         for t in data_type:
             list_type = t + '_images'
@@ -90,6 +110,13 @@ class Kitti(object):
                 c_n = os.path.join(self.calibration_folder, fn+self.calibration_extension)
                 calibration_data.append(self.load_calibration(c_n))
             return_list.append(calibration_data)
+
+        if disparity:
+            disparity_data = []
+            for fn in tqdm(file_list):
+                d_n = os.path.join(self.disparity_folder, fn+self.disparity_extension)
+                disparity_data.append(self.load_disparity(d_n))
+            return_list.append(disparity_data)
         return return_list
 
     def load_color(self, file_name):
@@ -125,6 +152,10 @@ class Kitti(object):
         calib_cam2[2,:] = calib_cam2_all[8:11]
         baseline = calib_cam1_all[3]-calib_cam2_all[3]
         return [calib_cam1, calib_cam2, baseline]
+
+    def load_disparity(self, file_name):
+        return cv2.imread(file_name, cv2.CV_LOAD_IMAGE_UNCHANGED)
+
     @staticmethod
     def parse_calibration_line(line):
         out = []
