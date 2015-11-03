@@ -107,10 +107,10 @@ class Kitti(object):
         for line in calib.readlines():
             if line[0:2] == 'P2':
                 cams_found.append('P2')
-                calib_cam1_all = [float(f) for f in line[4:].split(' ')]
+                calib_cam1_all = Kitti.parse_calibration_line(line[4:])
             if line[0:2] == 'P3':
                 cams_found.append('P3')
-                calib_cam2_all = [float(f) for f in line[4:].split(' ')]
+                calib_cam2_all = Kitti.parse_calibration_line(line[4:])
         calib.close()
         if len(cams_found) != 2:
             raise Exception('Unrecognized calibration file format' )
@@ -125,3 +125,13 @@ class Kitti(object):
         calib_cam2[2,:] = calib_cam2_all[8:11]
         baseline = calib_cam1_all[3]-calib_cam2_all[3]
         return [calib_cam1, calib_cam2, baseline]
+    @staticmethod
+    def parse_calibration_line(line):
+        out = []
+        for f in line.split(' '):
+            try:
+                val = float(f)
+                out.append(val)
+            except ValueError:
+                pass
+        return out
