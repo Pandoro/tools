@@ -1,6 +1,7 @@
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
+from collections import Counter
 
 class confusion_matrix(object):
     def __init__(self, label_names, ignore_set=[]):
@@ -32,7 +33,8 @@ class confusion_matrix(object):
 
         self.confusion = np.zeros((self.class_count_raw+1, self.class_count_raw))
         for gt, res in zip(gts, results):
-            self.confusion[gt.flatten(), res.flatten()] +=1
+            for pos, val in Counter(zip(gt.flatten(), res.flatten())).items():
+                self.confusion[pos] += val
 
         self.confusion = self.confusion[:self.class_count_raw]
 
