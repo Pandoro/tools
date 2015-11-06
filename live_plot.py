@@ -18,29 +18,27 @@ class live_plot(object):
         self.ylabel = ylabel
 
         self.data = {}
-        self.properties = {}
-        self.labels = {}
+        self.kwargs = {}
 
 
-    def add_plot(self, name, properties='', data=[], label='None supplied'):
+    def add_plot(self, name, data=[], **kwargs):
         if name in self.data:
             raise Exception('A plot already exist for :' + name)
         self.data[name] = data
-        self.properties[name] = properties
-        self.labels[name] = label
+        self.kwargs[name] = kwargs
+        if not 'label' in kwargs:
+            self.kwargs[name]['label'] = 'None supplied'
         self.plot()
 
 
-    def update_plot(self, name, data=None, label=None, properties=None, redraw=True):
+    def update_plot(self, name, data=None, redraw=True, **kwargs):
         if not name in self.data:
             raise Exception('Cannot update non-existing plot: '+ name)
 
         if data is not None:
             self.data[name] = data
-        if label is not None:
-            self.labels[name] = label
-        if properties is not None:
-            self.properties[name] = properties
+        for k, v in kwargs:
+            self.kwargs[name][k]= v
         if redraw:
             self.plot()
 
@@ -61,9 +59,12 @@ class live_plot(object):
             self.ax.set_ylabel(self.ylabel, fontsize=18)
 
         for k in self.data.keys():
-            self.ax.plot(self.data[k], self.properties[k], label=self.labels[k])
+            if len(self.data[k]) > 0 and type(self.data[k][0]) is tuple:
+                self.ax.plot(*zip(*self.data[k]), **(self.kwargs[k]))
+            else:
+                self.ax.plot(self.data[k], **(self.kwargs[k]))
 
-        self.ax.legend()
+        self.ax.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
 
         display.display(plt.gcf())
         display.clear_output(wait=True)
