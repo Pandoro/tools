@@ -55,6 +55,8 @@ class Kitti(object):
 
         self.train_filenames = self.config['train_images']
         self.test_filenames = self.config['test_images']
+        self.dataset = self.config['dataset_name']
+
 
         if not 'Void' in [l['name'] for l in self.config['color_coding']]:
             raise Exception('Please define the \'Void\' label in your color coding.')
