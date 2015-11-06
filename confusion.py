@@ -65,8 +65,8 @@ class confusion_matrix(object):
         global_score = np.sum(np.diag(confusion))/total
         diag = np.diag(confusion)
         union = self.gt_sum_per_class + self.sum_per_class - diag
-        avg = np.mean(diag/self.gt_sum_per_class)
-        avg_iou = np.mean(diag/union)
+        avg = np.nanmean(diag/self.gt_sum_per_class)
+        avg_iou = np.nanmean(diag/union)
 
         return global_score, avg, avg_iou
 
