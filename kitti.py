@@ -60,10 +60,11 @@ class Kitti(object):
 
         if not 'Void' in [l['name'] for l in self.config['color_coding']]:
             raise Exception('Please define the \'Void\' label in your color coding.')
-        self.class_count = len(self.config['color_coding'])-1 #the void label does not count.
-        self.class_names = [x['name'] for x in self.config['color_coding'] if x['name'] != 'Void']
         self.label_to_rgb_dict = {x['label'] : x['color']  for x in self.config['color_coding']}
         self.rgb_to_label_dict = { np.sum(np.asarray(x['color'])*np.asarray([1,1000, 1000000])) : x['label']  for x in self.config['color_coding']}
+        self.class_count = len(self.label_to_rgb_dict)-1 #the void label does not count.
+        self.class_names = {x['label'] : x['name'] for x in self.config['color_coding'] if x['name'] != 'Void'}
+        self.class_names = [self.class_names[i] for i in range(self.class_count)]
 
 
     def label_to_rgb(self, image):
