@@ -5,7 +5,7 @@ class live_plot(object):
     def __init__(self, xmin=None, xmax=None, xlabel=None, ymin=None, ymax=None, ylabel=None, axes=None, figsize=(18,6)):
 
         if axes is None:
-            self.fig = plt.figure(figsize)
+            self.fig = plt.figure(figsize=figsize)
             self.ax = self.fig.add_axes((0,0,1,1))
         else:
             self.ax = axes
