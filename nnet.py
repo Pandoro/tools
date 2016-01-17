@@ -4,6 +4,7 @@ from theano.tensor.signal import downsample
 from theano.tensor.nnet import conv
 import theano.sandbox.cuda.dnn as dnn
 import theano.sandbox.cuda.basic_ops as basic_ops
+import theano.sandbox.rng_mrg
 import numpy as np
 
 class LogisticRegression(object):
@@ -107,8 +108,7 @@ class Regression(object):
 
 
 class HiddenLayer(object):
-    def __init__(self, rng, input, n_in=None, n_out=None, W=None, b=None,
-                 activation=T.tanh):
+    def __init__(self, rng, input, n_in=None, n_out=None, W=None, b=None):
         self.input = input
         #init weight and bias if none are given.
         if W is None:
@@ -120,8 +120,9 @@ class HiddenLayer(object):
                 ),
                 dtype=theano.config.floatX
             )
-            if activation == theano.tensor.nnet.sigmoid:
-                W_values *= 4
+            #TODO hmmmm, what about this after activation functions are removed from the layers :x ?
+            #if activation == theano.tensor.nnet.sigmoid:
+            #    W_values *= 4
 
             W = theano.shared(value=W_values, name='W', borrow=True)
 
@@ -133,15 +134,7 @@ class HiddenLayer(object):
         self.W = W
         self.b = b
 
-        #also store the activation function for twin layers
-        self.activation = activation
-
-        #apply activation
-        lin_output = T.dot(input, self.W) + self.b
-        self.output = (
-            lin_output if self.activation is None
-            else self.activation(lin_output)
-        )
+        self.output = T.dot(input, self.W) + self.b
 
         # parameters of the model
         self.params = [self.W, self.b]
@@ -149,10 +142,90 @@ class HiddenLayer(object):
 
 
 class ConvLayer(object):
-    def __init__(self, rng, input, filter_shape=None, image_shape=None,activation=T.tanh,W=None, b=None, init='something', border=None):
-
+    def __init__(self, rng, input, filter_shape=None, image_shape=None,W=None, b=None, init='something', border=None, subsample=(1,1), name=''):
         if not image_shape is  None:
             assert image_shape[1] == filter_shape[1]
+
+        #weight and bias init if none are given.
+        if init == 'zero':
+            if W is None:
+                W_values = np.zeros(filter_shape, dtype=theano.config.floatX)
+                W = theano.shared(value=W_values, name='W_conv'+name, borrow=True)
+        else:
+            if W is None:
+                fan_in = np.prod(filter_shape[1:])
+                fan_out = (filter_shape[0] * np.prod(filter_shape[2:]))
+                # initialize weights with random weights
+                W_bound = np.sqrt(6. / (fan_in + fan_out))
+                W = theano.shared(
+                    np.asarray(
+                        rng.uniform(low=-W_bound, high=W_bound, size=filter_shape),
+                        dtype=theano.config.floatX
+                    ), name='W_conv'+name,
+                    borrow=True
+                )
+
+        if b is None:
+            # the bias is a 1D tensor -- one bias per output feature map
+            b_values = np.zeros((filter_shape[0],), dtype=theano.config.floatX)
+            b = theano.shared(value=b_values, name='b_conv'+name, borrow=True)
+
+        if type(W) == np.ndarray:
+            W = theano.shared(value=W, name='W_conv'+name, borrow=True)
+        if type(b) == np.ndarray:
+            b = theano.shared(value=b, name='b_conv'+name, borrow=True)
+        self.W = W
+        self.b = b
+
+        self.filter_shape = filter_shape
+        #self.image_shape = image_shape
+
+        #if border == 'same':
+        #    border_mode = 'full'
+
+        #conv_out = conv.conv2d(
+        #    input=input,
+        #    filters=self.W,
+        #    filter_shape=filter_shape,
+        #    #image_shape=image_shape,
+        #    border_mode=border_mode
+        #)
+
+        #if border == 'same':
+        #    border_l = T.shape(W)[2] - 1  # this is the filter size minus 1
+        #    conv_out = conv_out[:,:,border_l:(T.shape(input)[2]+border_l),border_l:(T.shape(input)[3]+border_l)]
+
+        self.border = border
+        if border == 'same':
+            assert self.filter_shape[2] % 2 == 1 and self.filter_shape[3] % 2 == 1
+            self.border_padding = ((self.filter_shape[2]-1)//2, (self.filter_shape[3]-1)//2)
+        elif border == 'full':
+            assert self.filter_shape[2] % 2 == 1 and self.filter_shape[3] % 2 == 1
+            self.border_padding = (self.filter_shape[2]-1, self.filter_shape[3]-1)
+        elif border == 'valid':
+            self.border_padding = (0,0)
+        else:
+            return NotImplementedError()
+
+        self.subsample = subsample
+
+        conv_out = dnn.dnn_conv(
+            img = input,
+            kerns = self.W,
+            border_mode = self.border_padding,
+            subsample = self.subsample
+        )
+
+        self.output = conv_out + self.b.dimshuffle('x', 0, 'x', 'x')
+
+        # store parameters of this layer
+        self.params = [self.W, self.b]
+
+        self.input = input
+
+
+class DeConvLayer(object):
+    def __init__(self, rng, input, filter_shape=None,W=None, b=None, init='something', border=None, subsample=(1,1)):
 
         #weight and bias init if none are given.
         if init == 'zero':
@@ -182,50 +255,50 @@ class ConvLayer(object):
         self.b = b
 
         self.filter_shape = W.shape.eval()
-        #self.image_shape = image_shape
-
-        #if border == 'same':
-        #    border_mode = 'full'
-
-        #conv_out = conv.conv2d(
-        #    input=input,
-        #    filters=self.W,
-        #    filter_shape=filter_shape,
-        #    #image_shape=image_shape,
-        #    border_mode=border_mode
-        #)
-
-        #if border == 'same':
-        #    border_l = T.shape(W)[2] - 1  # this is the filter size minus 1
-        #    conv_out = conv_out[:,:,border_l:(T.shape(input)[2]+border_l),border_l:(T.shape(input)[3]+border_l)]
 
         self.border = border
         if border == 'same':
+
             assert self.filter_shape[2] % 2 == 1 and self.filter_shape[3] % 2 == 1
             self.border_padding = ((self.filter_shape[2]-1)//2, (self.filter_shape[3]-1)//2)
+            out = basic_ops.gpu_alloc_empty(input.shape[0], self.W.shape[1], input.shape[2]*subsample[0], input.shape[3]*subsample[1])
         elif border == 'valid':
             self.border_padding = (0,0)
+            out = basic_ops.gpu_alloc_empty(input.shape[0], self.W.shape[1], input.shape[2]*subsample[0]+(self.filter_shape[2]-1), input.shape[3]*subsample[1]+(self.filter_shape[3]-1))
         else:
             return NotImplementedError()
 
-        conv_out = dnn.dnn_conv(
-            img = input,
-            kerns = self.W,
-            border_mode = self.border_padding
-        )
+        self.subsample = subsample
 
-        self.activation = activation
+        img = basic_ops.gpu_contiguous(input - self.b.dimshuffle('x', 0, 'x', 'x'))
+        kerns = basic_ops.gpu_contiguous(self.W)
+        desc = dnn.GpuDnnConvDesc(border_mode=self.border_padding, subsample=self.subsample,
+                              conv_mode='conv')(basic_ops.gpu_alloc_empty(img.shape[0], kerns.shape[1], img.shape[2]*subsample[0], img.shape[3]*subsample[1]).shape, kerns.shape)
+        d_img = dnn.GpuDnnConvGradI()(kerns, img, out, desc)
 
-        #adding the bias
-        if self.activation is None:
-            self.output = conv_out + self.b.dimshuffle('x', 0, 'x', 'x')
-        else:
-            self.output = self.activation(conv_out + self.b.dimshuffle('x', 0, 'x', 'x'))
+        conv_out = d_img
+
+        self.output = conv_out
 
         # store parameters of this layer
         self.params = [self.W, self.b]
 
         self.input = input
+
+class Relu(object):
+    def __init__(self, input):
+        self.input = input
+        self.output = T.nnet.relu(input)
+
+class Tanh(object):
+    def __init__(self, input):
+        self.input = input
+        self.output = T.tanh(input)
+
+class Sigmoid(object):
+    def __init__(self, input):
+        self.input = input
+        self.output = T.nnet.sigmoid(input)
 
 
 
@@ -243,14 +316,29 @@ class AveragePoolLayer(object):
 
 
 class MaxPoolLayer(object):
-    def __init__(self, input, poolsize=(2, 2)):
+    def __init__(self, input, poolsize=(2, 2), store_pooling_indices=False, keep_original_size=False):
         self.poolsize=poolsize
         self.input = input
-        self.output = downsample.max_pool_2d(
-            input=self.input.dimshuffle(0,1,3,2),
-            ds=self.poolsize,
-            ignore_border=False
-        ).dimshuffle(0,1,3,2) # the two dimshuffles are needed because the last dimensions output cannot be over 512!
+        self.store_pooling_indices = store_pooling_indices
+        if self.store_pooling_indices:
+            self.pooling_indices = downsample.max_pool_2d_same_size(
+                input=self.input.dimshuffle(0,1,3,2) + 10.0, #TODO fix this nicely.
+                # 10 is arbitrary and can still fail for -10 entries. But at least with standard non-linearities this will hopefully fail less often.
+                patch_size = self.poolsize
+            ).dimshuffle(0,1,3,2) # the two dimshuffles are needed because the last dimensions output cannot be over 512!
+            self.pooling_indices = T.neq(self.pooling_indices, 0.0)
+
+        if keep_original_size:
+            self.output = downsample.max_pool_2d_same_size(
+                input=self.input.dimshuffle(0,1,3,2),
+                patch_size = self.poolsize
+            ).dimshuffle(0,1,3,2)
+        else:
+            self.output = downsample.max_pool_2d(
+                input=self.input.dimshuffle(0,1,3,2),
+                ds=self.poolsize,
+                ignore_border=False
+            ).dimshuffle(0,1,3,2) # the two dimshuffles are needed because the last dimensions output cannot be over 512!
 
         #self.output = dnn.dnn_pool(
         #    img=self.input,
@@ -261,7 +349,7 @@ class MaxPoolLayer(object):
 
 
 class UnPoolLayer(object):
-    def __init__(self, input, poolsize=(2, 2), output_shape=None):
+    def __init__(self, input, poolsize=(2, 2), output_shape=None, pooling_indices=None):
         self.poolsize=poolsize
         self.input = input
         
@@ -277,6 +365,9 @@ class UnPoolLayer(object):
                 self.output = self.output[:,:,:output_shape[2],:]
             if T.lt(output_shape[3], self.output.shape[3]):
                 self.output = self.output[:,:,:,:output_shape[3]]
+
+        if pooling_indices is not None:
+            self.output = self.output * pooling_indices
 
 
 
@@ -352,7 +443,6 @@ class ConvolutionSoftMaxCombo(object):
             rng,
             input=input,
             filter_shape=filter_shape,
-            activation=None,
             border='same',
             init='zero'
         )
@@ -378,10 +468,24 @@ class ConvolutionSoftMaxCombo(object):
         return self.softmax.errors(y)
 
 
+class Dropout(object):
+    def __init__(self, input, dropout_probability, state_variable):
+        self.input = input
+        self.dropout_probability = dropout_probability
+        self.retain = 1.0 - self.dropout_probability
+        self.state_variable = state_variable
 
-class Optimizer(object):
-    def __init__(self,learning_rate, params, cost, input, output):
+        self.random_stream = theano.sandbox.rng_mrg.MRG_RandomStreams()
+        self.mask = self.random_stream.binomial(self.input.shape, p=self.retain, dtype=theano.config.floatX)
+
+        #Train = 0, Test = 1
+        self.output = theano.ifelse.ifelse(T.eq(state_variable, 0), self.input*self.mask/self.retain, self.input)
+
+
+class SGD_Optimizer(object):
+    def __init__(self,learning_rate, params, cost, input):
         self.params = params
+        self.learning_rate = learning_rate
 
         self.cost = cost
 
@@ -399,18 +503,68 @@ class Optimizer(object):
         ]
 
 
-        inp = []
+        self.inp = []
         if type(input) == list:
-            inp += input
+            self.inp += input
         else:
-            inp.append(input)
+            self.inp.append(input)
 
-        if type(output) == list:
-            inp += output
-        else:
-            inp.append(output)
         self.get_gradients = theano.function(
-            inputs=inp,
+            inputs=self.inp,
+            outputs=self.cost,
+            updates=self.update_grads
+        )
+
+        self.update_model = theano.function(
+            inputs=[],
+            updates=self.update_params
+        )
+
+class ADADELTA_Optimizer(object):
+    def __init__(self,learning_rate, rho, params, cost, input, epsilon=1e-7):
+        self.params = params
+        self.rho = rho
+        self.epsilon = epsilon
+        self.learning_rate = learning_rate
+
+        self.cost = cost
+
+        self.grads = T.grad(self.cost, self.params)
+        self.updates = [theano.shared(np.zeros_like(p.get_value(borrow=True))) for p in self.params]
+        self.grad_accu = [theano.shared(np.zeros_like(p.get_value(borrow=True))) for p in self.params]
+        self.update_accu = [theano.shared(np.zeros_like(p.get_value(borrow=True))) for p in self.params]
+
+        gr = [self.rho*grad_accu_i + (1.0-self.rho)*grad_i*grad_i
+            for grad_accu_i, grad_i in zip(self.grad_accu, self.grads) ]
+        up = [self.learning_rate*T.sqrt((updates_accu_i + self.epsilon)/(grad_accu_i + self.epsilon))*grad_i
+            for grad_i, grad_accu_i, updates_accu_i in zip(self.grads, gr, self.update_accu)]
+
+        self.update_grads = [
+            (grad_accu_i, gr_i)
+            for grad_accu_i, gr_i in zip(self.grad_accu, gr)
+        ]+[
+            (updates_i, up_i)
+            for updates_i, up_i in zip(self.updates, up)
+        ]+[
+            (updates_accu_i, self.rho*updates_accu_i - (1.0-self.rho)*up_i*up_i)
+            for up_i, updates_accu_i in zip(up, self.update_accu)
+        ]
+
+
+        self.update_params = [
+            (param_i, param_i - learning_rate * grad_i)
+            for param_i, grad_i in zip(self.params, self.updates)
+        ]
+
+
+        self.inp = []
+        if type(input) == list:
+            self.inp += input
+        else:
+            self.inp.append(input)
+
+        self.get_gradients = theano.function(
+            inputs=self.inp,
             outputs=self.cost,
             updates=self.update_grads
         )
