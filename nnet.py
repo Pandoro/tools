@@ -257,8 +257,8 @@ class DeConvLayer(object):
         self.filter_shape = W.shape.eval()
 
         self.border = border
+        # This is largely based on https://github.com/Newmu/dcgan_code/blob/master/lib/ops.py#L85 with some minor changes.
         if border == 'same':
-
             assert self.filter_shape[2] % 2 == 1 and self.filter_shape[3] % 2 == 1
             self.border_padding = ((self.filter_shape[2]-1)//2, (self.filter_shape[3]-1)//2)
             out = basic_ops.gpu_alloc_empty(input.shape[0], self.W.shape[1], input.shape[2]*subsample[0], input.shape[3]*subsample[1])
