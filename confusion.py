@@ -103,3 +103,4 @@ class confusion_matrix(object):
         _ = ax[0].set_title('row normalized', horizontalalignment='center', y=-0.1)
         _ = ax[1].set_title('column normalized', horizontalalignment='center', y=-0.1)
         _ = fig.suptitle('global:{0:.2%}, average:{1:.2%}, avg_iou:{2:.2%}'.format(global_score, avg, avg_iou), fontsize=14, fontweight='bold', x = 0.4, y = 0.03)
+        return fig
