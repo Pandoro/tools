@@ -157,7 +157,10 @@ class Kitti(object):
         return [calib_cam1, calib_cam2, baseline]
 
     def load_disparity(self, file_name):
-        return cv2.imread(file_name, cv2.CV_LOAD_IMAGE_UNCHANGED)
+        d = cv2.imread(file_name, cv2.CV_LOAD_IMAGE_UNCHANGED)
+        if d.dtype == np.uint16:
+            d = d.astype(np.float32)/256.
+        return d
 
     @staticmethod
     def parse_calibration_line(line):
