@@ -24,27 +24,31 @@ class flip_augmentation(object):
 
 
 class scale_augmentation(object):
-    def __init__(self, max_x=1.2, max_y=1.2, image_axis_y_x=[-2, -1], semantic_axis_y_x=[-2, -1]):
+    def __init__(self, max_scale=1.2, image_axis_y_x=[-2, -1], semantic_axis_y_x=[-2, -1], depth_axes=0, depth_channels=None):
         '''
         max_x/max_y speficy the maximum scaling factor. The minimum corresponds to 1.0/max.
         the axis specify which axis to use as y and x axis.
+        The depth axes and channels specify which channels in which axes could represent depth,
+        as these need to be treated differently.
         '''
-        self.x_min = np.log(1./max_x)/np.log(2.0)
-        self.x_max = np.log(max_x)/np.log(2.0)
-        self.y_min = np.log(1./max_y)/np.log(2.0)
-        self.y_max = np.log(max_y)/np.log(2.0)
+        self.scale_min = np.log(1./max_scale)/np.log(2.0)
+        self.scale_max = np.log(max_scale)/np.log(2.0)
         self.image_axis_y_x = image_axis_y_x
         self.semantic_axis_y_x = semantic_axis_y_x
+        self.depth_axes = depth_axes
+        self.depth_channels = depth_channels
 
 
     def apply(self, image, semantic_image):
-        x = np.power(2.0,np.random.uniform(low=self.x_min, high=self.x_max))
-        y = np.power(2.0,np.random.uniform(low=self.y_min, high=self.y_max))
+        s = np.power(2.0,np.random.uniform(low=self.scale_min, high=self.scale_max))
         zoom_im = np.ones(len(image.shape))
-        zoom_im[self.image_axis_y_x] = y, x
+        zoom_im[self.image_axis_y_x] = s,s
         im = scipy.ndimage.interpolation.zoom(image, zoom=zoom_im, order=0)
+        # if there are depth channels, we devide by the scaling factor.
+        if self.depth_channels is not None:
+            np.swapaxes(np.swapaxes(im, 0, self.depth_axes)[depth_channels]/s, 0, self.depth_axes)
         zoom_ta = np.ones(len(semantic_image.shape))
-        zoom_ta[self.semantic_axis_y_x] = y, x
+        zoom_ta[self.semantic_axis_y_x] = s, s
         ta = scipy.ndimage.interpolation.zoom(semantic_image, zoom=zoom_ta, order=0)
         return im, ta
 
