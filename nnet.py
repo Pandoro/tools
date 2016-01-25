@@ -513,13 +513,12 @@ class BatchNormalization(object):
         #The switch to change between inference and training/statistics collection.
         self.state_variable = theano.shared(value=np.asscalar(np.asarray([0], dtype=np.uint8)), name='is_testing')
 
-
-        #training
         self.output = theano.ifelse.ifelse(T.eq(self.state_variable, 0),
-            (self.input-self.mean.dimshuffle(*dimshuf))/
-              (T.sqrt(self.variance) + self.eps).dimshuffle(*dimshuf)*
-              self.a.dimshuffle(*dimshuf) +
-              self.b.dimshuffle(*dimshuf),
+        #training
+            ((self.input-self.mean.dimshuffle(*dimshuf))/
+              (T.sqrt(self.variance + self.eps)).dimshuffle(*dimshuf)*
+               self.a.dimshuffle(*dimshuf) +
+              self.b.dimshuffle(*dimshuf)),
         #testing, just use the final values
             self.input*self.a_inf.dimshuffle(*dimshuf) + self.b_inf.dimshuffle(*dimshuf)
         )
