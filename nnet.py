@@ -481,6 +481,79 @@ class Dropout(object):
         #Train = 0, Test = 1
         self.output = theano.ifelse.ifelse(T.eq(state_variable, 0), self.input*self.mask/self.retain, self.input)
 
+class BatchNormalization(object):
+    def __init__(self, input, feature_channels):
+
+        self.input = input
+        self.feature_channels = feature_channels
+
+        #setup params
+        self.a = theano.shared(value=np.ones(feature_channels, dtype=theano.config.floatX), name='a')
+        self.b = theano.shared(value=np.zeros(feature_channels, dtype=theano.config.floatX), name='b')
+
+        #setup collection space
+        self.collected_mean = theano.shared(value=np.zeros(feature_channels, dtype=theano.config.floatX), name='mean_collect')
+        self.collected_var = theano.shared(value=np.ones(feature_channels, dtype=theano.config.floatX), name='var_collect')
+        self.collected_count = theano.shared(value=np.asarray(0, dtype=theano.config.floatX), name='count')
+
+
+        #setup final values
+        self.a_inf = theano.shared(value=np.ones(feature_channels, dtype=theano.config.floatX), name='a_inf')
+        self.b_inf = theano.shared(value=np.zeros(feature_channels, dtype=theano.config.floatX), name='b_inf')
+
+        #setup current values
+        dimshuf = ['x', 0] + (self.input.ndim -2)*['x']
+        axis = [0] + range(2,self.input.ndim )
+        self.mean = T.mean(self.input, axis=axis)
+        self.variance = T.var(self.input, axis=axis)
+
+        #needed to make sure we don't divide by zero.
+        self.eps = 1e-5
+
+        #The switch to change between inference and training/statistics collection.
+        self.state_variable = theano.shared(value=np.asscalar(np.asarray([0], dtype=np.uint8)), name='is_testing')
+
+
+        #training
+        self.output = theano.ifelse.ifelse(T.eq(self.state_variable, 0),
+            (self.input-self.mean.dimshuffle(*dimshuf))/
+              (T.sqrt(self.variance) + self.eps).dimshuffle(*dimshuf)*
+              self.a.dimshuffle(*dimshuf) +
+              self.b.dimshuffle(*dimshuf),
+        #testing, just use the final values
+            self.input*self.a_inf.dimshuffle(*dimshuf) + self.b_inf.dimshuffle(*dimshuf)
+        )
+
+        self.params = [self.a, self.b]
+
+    def reset_statistics(self, start_collecting=True):
+        #counter, mean and stf to start
+        self.collected_mean.set_value(np.zeros(self.feature_channels, dtype=theano.config.floatX))
+        self.collected_var.set_value(np.ones(self.feature_channels, dtype=theano.config.floatX))
+        self.collected_count.set_value(0)
+
+        #Change back to training mode
+        self.state_variable.set_value(0)
+
+    def statistis_updates(self):
+        #Collect the theano updates we need to perform after each batch.
+        updates = []
+        updates.append((self.collected_mean, (self.collected_mean*self.collected_count + self.mean)/(self.collected_count + 1.0)))
+        updates.append((self.collected_var, (self.collected_var*self.collected_count + self.variance)/(self.collected_count + 1.0)))
+        updates.append((self.collected_count, self.collected_count + 1.0))
+        return updates
+
+    def switch_to_inference(self):
+        #Set the final inference parameters
+        #(act - mean)/sqrt(var)*a + b
+        #act/sqrt(var)*a - mean/sqrt(var)*a + b
+        self.a_inf.set_value(self.a.get_value() / np.sqrt(self.collected_var.get_value() + self.eps))
+        self.b_inf.set_value(self.b.get_value() - self.collected_mean.get_value()*self.a_inf.get_value())
+
+        #Swtich to inference mode.
+        self.state_variable.set_value(1)
+
+
 
 class SGD_Optimizer(object):
     def __init__(self,learning_rate, params, cost, input):
