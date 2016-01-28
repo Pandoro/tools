@@ -95,6 +95,10 @@ class confusion_matrix(object):
         plt.colorbar(im, cax=cax, **kw)
         ax[0].set_yticks(range(class_count))
         ax[0].set_xticks(range(class_count))
+        for r in range(0,class_count):
+            for c in range(0,class_count):
+                ax[0].text(c, r, '{0:.2%}'.format(confusion_normalized_row[r,c]), horizontalalignment='center', verticalalignment='center')
+                ax[1].text(c, r, '{0:.2%}'.format(confusion_normalized_col[r,c]), horizontalalignment='center', verticalalignment='center')
         _ = ax[0].set_yticklabels(label_names)
         ax[0].xaxis.tick_top()
         _ = ax[0].set_xticklabels(label_names, rotation='vertical')
