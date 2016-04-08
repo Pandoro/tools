@@ -23,20 +23,33 @@ class confusion_matrix(object):
         self.confusion = None
 
 
-    def compute(self, gts, results):
+    def compute(self, gts, results, allow_void_prediction=True):
         '''
         Do the actual computation of the confusion matrix itself.
         gts -- a list of ground truth images, these should be 2d images with label indices
         results -- a list of the gt length with the corresponding result images.
         '''
-        assert(len(gts)==len(results))
 
-        self.confusion = np.zeros((self.class_count_raw+1, self.class_count_raw))
+        if type(gts) == list: #Assume that input and output are presented with the same type
+            assert(len(gts)==len(results))
+        elif type(gts) == np.ndarray:
+            assert(gts.shape==results.shape)
+        else:
+            raise Exception('Unsupported format for results and ground truth, please use arrays or lists')
+
+        if allow_void_prediction:
+            self.confusion = np.zeros((self.class_count_raw+1, self.class_count_raw+1))
+        else:
+            self.confusion = np.zeros((self.class_count_raw+1, self.class_count_raw))
+
         for gt, res in zip(gts, results):
             for pos, val in Counter(zip(gt.flatten(), res.flatten())).items():
                 self.confusion[pos] += val
 
-        self.confusion = self.confusion[:self.class_count_raw]
+        if allow_void_prediction:
+            self.confusion = self.confusion[:self.class_count_raw, :self.class_count_raw]
+        else:
+            self.confusion = self.confusion[:self.class_count_raw]
 
         valid_range = range(self.class_count_raw)
         for ig in self.ignore_set:
@@ -71,7 +84,7 @@ class confusion_matrix(object):
         return global_score, avg, avg_iou
 
 
-    def plot(self, use_ignore_set=True, colormap=mpl.cm.Spectral_r):
+    def plot(self, use_ignore_set=True, colormap=mpl.cm.Spectral_r, add_numbers=False):
         '''
         Plots the confusion matrix, once row and once column normalized.
         use_ignore_set -- set this to false to base the results using all classes.
@@ -95,10 +108,11 @@ class confusion_matrix(object):
         plt.colorbar(im, cax=cax, **kw)
         ax[0].set_yticks(range(class_count))
         ax[0].set_xticks(range(class_count))
-        for r in range(0,class_count):
-            for c in range(0,class_count):
-                ax[0].text(c, r, '{0:.2%}'.format(confusion_normalized_row[r,c]), horizontalalignment='center', verticalalignment='center')
-                ax[1].text(c, r, '{0:.2%}'.format(confusion_normalized_col[r,c]), horizontalalignment='center', verticalalignment='center')
+        if(add_numbers):
+            for r in range(0,class_count):
+                for c in range(0,class_count):
+                    ax[0].text(c, r, '{0:.2%}'.format(confusion_normalized_row[r,c]), horizontalalignment='center', verticalalignment='center', fontsize=10)
+                    ax[1].text(c, r, '{0:.2%}'.format(confusion_normalized_col[r,c]), horizontalalignment='center', verticalalignment='center', fontsize=10)
         _ = ax[0].set_yticklabels(label_names)
         ax[0].xaxis.tick_top()
         _ = ax[0].set_xticklabels(label_names, rotation='vertical')
@@ -108,3 +122,27 @@ class confusion_matrix(object):
         _ = ax[1].set_title('column normalized', horizontalalignment='center', y=-0.1)
         _ = fig.suptitle('global:{0:.2%}, average:{1:.2%}, avg_iou:{2:.2%}'.format(global_score, avg, avg_iou), fontsize=14, fontweight='bold', x = 0.4, y = 0.03)
         return fig
+
+    def print_confusion_matrix(self, use_ignore_set=True):
+        global_score, avg, avg_iou = self.statistics(use_ignore_set)
+        if use_ignore_set:
+            confusion = self.confusion_ignored
+            class_count = self.class_count
+            label_names = self.label_names
+        else:
+            confusion = self.confusion
+            class_count = self.class_count_raw
+            label_names = self.label_names_raw
+        confusion_normalized_row = (confusion.copy().T/self.gt_sum_per_class).T * 100.0
+
+        for l, conf in zip(label_names, confusion_normalized_row):
+            print('{0}, '.format(l)),
+            for c in range(class_count):
+                if c == class_count -1:
+                    print('{0:.2f}'.format(conf[c]))
+                else:
+                    print('{0:.2f}, '.format(conf[c])),
+
+        print('g {0:.2f}'.format(global_score*100.0))
+        print('a {0:.2f}'.format(avg*100.0))
+        print('i {0:.2f}'.format(avg_iou*100.0))
