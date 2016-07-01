@@ -26,3 +26,6 @@ def downscale_labels(factor, labels, threshold):
     hit_counts *=threshold
     new_labels[counts < hit_counts] = -1
     return new_labels
+
+def mM(array):
+    return np.min(array), np.max(array)
