@@ -29,7 +29,7 @@ class confusion_matrix(object):
         gts -- a list of ground truth images, these should be 2d images with label indices
         results -- a list of the gt length with the corresponding result images.
         '''
-
+        '''
         if type(gts) == list: #Assume that input and output are presented with the same type
             assert(len(gts)==len(results))
         elif type(gts) == np.ndarray:
@@ -59,6 +59,16 @@ class confusion_matrix(object):
         for i_n, i in enumerate(valid_range):
             for j_n,j in enumerate(valid_range):
                 self.confusion_ignored[i_n, j_n] = self.confusion[i,j]
+        '''
+        #Lucas took my old code and made it soo much fasta!
+        #https://github.com/lucasb-eyer/lbtoolbox/blob/master/lbtoolbox/evaluation.py
+        #TODO Get back the old code with support for void predictions etc.
+        self.confusion_ignored = np.zeros((self.class_count,self.class_count), np.float64)
+        for gt in range(self.class_count):
+            preds, n = np.unique(results[gts == gt], return_counts=True)
+            self.confusion_ignored[gt, preds] = n
+
+        self.confusion = self.confusion_ignored
 
 
     def statistics(self, use_ignore_set=True):
@@ -82,7 +92,6 @@ class confusion_matrix(object):
         avg_iou = np.nanmean(diag/union)
 
         return global_score, avg, avg_iou
-
 
     def plot(self, use_ignore_set=True, colormap=mpl.cm.Spectral_r, add_numbers=False):
         '''
