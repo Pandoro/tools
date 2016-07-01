@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 from IPython import display
 
 class live_plot(object):
-    def __init__(self, xmin=None, xmax=None, xlabel=None, ymin=None, ymax=None, ylabel=None, axes=None, figsize=(18,6)):
+    def __init__(self, xmin=None, xmax=None, xlabel=None, ymin=None, ymax=None, ylabel=None, axes=None, figsize=(14,6)):
 
         if axes is None:
             self.fig = plt.figure(figsize=figsize)
