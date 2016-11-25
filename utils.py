@@ -1,31 +1,29 @@
 import numpy as np
+import cv2
 
-def downscale_labels(factor, labels, threshold):
-    if factor == 1: #TODO unclean :(
-        return labels
-    m = np.min(labels)
-    M = np.max(labels)
-    if m < -1:
-        raise Exception('Labels should not have values below -1')
-    h,w = labels.shape
-    h_n = int(np.ceil(float(h)/factor))
-    w_n = int(np.ceil(float(w)/factor))
-    label_sums = np.zeros((h_n, w_n, M+2))
-    for y in xrange(0, h):
-        for x in xrange(0, w):
-            label_sums[y/factor, x/factor, labels[y,x]] +=1
+def soft_resize_labels(labels, newsize, valid_threshold, void_label):
+    possible_labels = set(np.unique(labels))
+    if void_label in possible_labels:
+        possible_labels.remove(void_label)
+    possible_labels = np.asarray(list(possible_labels))
 
-    hit_counts = np.sum(label_sums,2)
+    label_vol = np.zeros((labels.shape[0], labels.shape[1], len(possible_labels)))
+    for i, l in enumerate(possible_labels):
+        label_vol[:,:, i] = (labels == l)
 
-    label_sums = label_sums[:,:,:-1]
-    new_labels = np.argsort(label_sums, 2)[:,:,-1].astype(np.int32)
-    counts = label_sums.reshape(h_n*w_n, M+1)
-    counts = counts[np.arange(h_n*w_n),new_labels.flat]
-    counts = counts.reshape((h_n, w_n))
+    label_vol = cv2.resize(label_vol, newsize)
 
-    hit_counts *=threshold
-    new_labels[counts < hit_counts] = -1
-    return new_labels
+    # If there is only a single label, then the resize function returns a 2D tensor
+    if len(label_vol.shape) == 2:
+        label_vol = np.reshape(label_vol, (*label_vol.shape, 1))
+
+    max_idx = np.argmax(label_vol, 2) #The max label using this mapping
+    max_val = np.max(label_vol,2) #It's value
+
+    max_idx = possible_labels[max_idx] #Remap to original values
+    max_idx[max_val < valid_threshold] = void_label #Set the void label according to threshold.
+
+    return max_idx.astype(labels.dtype)
 
 def mM(array):
     return np.min(array), np.max(array)
