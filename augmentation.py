@@ -1,4 +1,5 @@
 import scipy.ndimage
+import cv2
 import numpy as np
 
 
@@ -24,14 +25,14 @@ class flip_augmentation(object):
 
 
 class scale_augmentation(object):
-    def __init__(self, max_scale=1.2, image_axis_y_x=[-2, -1], semantic_axis_y_x=[-2, -1], depth_axes=0, depth_channels=None):
+    def __init__(self, min_scale=1.2, max_scale=1.2,image_axis_y_x=[-2, -1], semantic_axis_y_x=[-2, -1], depth_axes=0, depth_channels=None):
         '''
         max_x/max_y speficy the maximum scaling factor. The minimum corresponds to 1.0/max.
         the axis specify which axis to use as y and x axis.
         The depth axes and channels specify which channels in which axes could represent depth,
         as these need to be treated differently.
         '''
-        self.scale_min = np.log(1./max_scale)/np.log(2.0)
+        self.scale_min = np.log(1./min_scale)/np.log(2.0)
         self.scale_max = np.log(max_scale)/np.log(2.0)
         self.image_axis_y_x = image_axis_y_x
         self.semantic_axis_y_x = semantic_axis_y_x
@@ -42,7 +43,7 @@ class scale_augmentation(object):
     def apply(self, image, semantic_image):
         s = np.power(2.0,np.random.uniform(low=self.scale_min, high=self.scale_max))
         zoom_im = np.ones(len(image.shape))
-        zoom_im[self.image_axis_y_x] = s,s
+        zoom_im[self.image_axis_y_x] = [s,s]
         im = scipy.ndimage.interpolation.zoom(image, zoom=zoom_im, order=0)
         # if there are depth channels, we devide by the scaling factor.
         if self.depth_channels is not None:
