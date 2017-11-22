@@ -5,49 +5,92 @@ import multiprocessing
 import queue
 
 
+def soft_resize_labels(labels, new_size, valid_threshold, void_label=-1):
+    """Perform a soft resizing of a label image.
 
-def soft_resize_labels(labels, newsize, valid_threshold, void_label):
+    This is achieved by first creating a 3D array of size `(height, width,
+    label_count)` which is then resized using OpenCV. Since all label channels
+    are resized separately, no mixing of labels is performed and discrete label
+    values can be retrieved afterwards.
+
+    Args:
+        label: A 2D Numpy array containing labels.
+        new_size: The target size, specified as `(Width, Height)` TODO: check!
+        valid_threshold: The fraction of the dominant label within a group,
+            needed to be set. If it falls below this fraction, the `void_label`
+            is set instead.
+        void_label: The actual label value of the void label. Defaults to -1.
+
+    Returns:
+        A resized version of the label image. Using interpolation, but returning
+        only valid labels.
+
+    """
     possible_labels = set(np.unique(labels))
     if void_label in possible_labels:
         possible_labels.remove(void_label)
     possible_labels = np.asarray(list(possible_labels))
 
-    label_vol = np.zeros((labels.shape[0], labels.shape[1], len(possible_labels)))
+    label_vol = np.zeros(
+        (labels.shape[0], labels.shape[1], len(possible_labels)))
     for i, l in enumerate(possible_labels):
         label_vol[:,:, i] = (labels == l)
 
-    label_vol = cv2.resize(label_vol, newsize)
+    label_vol = cv2.resize(label_vol, new_size)
 
-    # If there is only a single label, then the resize function returns a 2D tensor
+    # If there is only a single label, then the resize function returns a 2D
+    # tensor.
     if len(label_vol.shape) == 2:
         label_vol = np.reshape(label_vol, (*label_vol.shape, 1))
 
-    max_idx = np.argmax(label_vol, 2) #The max label using this mapping
-    max_val = np.max(label_vol,2) #It's value
+    # Fin the max label using this mapping and the actual label value
+    max_idx = np.argmax(label_vol, 2)
+    max_val = np.max(label_vol,2)
 
-    max_idx = possible_labels[max_idx] #Remap to original values
-    max_idx[max_val < valid_threshold] = void_label #Set the void label according to threshold.
+    # Remap to original values
+    max_idx = possible_labels[max_idx]
+    # Set the void label according to threshold.
+    max_idx[max_val < valid_threshold] = void_label
 
     return max_idx.astype(labels.dtype)
 
 
 def mM(array):
+    """Computes the min and max for a given array.
+
+    Args:
+        array: Input array for which to compute the min and max. All types for
+            which numpy can compute the min/max are supported.
+
+    Returns:
+        A tuple containing the min and max for the input array.
+    """
     return np.min(array), np.max(array)
 
 
 def mMm(array):
+    """Computes the min, max and mean for a given array.
+
+    Args:
+        array: Input array for which to compute the min, max and mean. All types
+            for which numpy can compute the min/max/mean are supported.
+
+    Returns:
+        A tuple containing the min, max and mean for the input array.
+    """
     return np.min(array), np.max(array), np.mean(array)
 
 
 class Uninterrupt(object):
-    '''
+    """
     Use as:
     with Uninterrupt() as u:
         while not u.interrupted:
             # train
-    I stole this from #from https://github.com/lucasb-eyer/lbtoolbox/blob/master/lbtoolbox/util.py
+    I stole this from:
+    https://github.com/lucasb-eyer/lbtoolbox/blob/master/lbtoolbox/util.py
     Sorry and thank you :p
-    '''
+    """
     def __init__(self, sig=signal.SIGINT):
         self.sig = sig
 
