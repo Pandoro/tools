@@ -1,7 +1,8 @@
 import numpy as np
 import cv2
 import signal
-import threading
+import multiprocessing
+import queue
 
 
 
@@ -72,28 +73,57 @@ class Uninterrupt(object):
             self.released = True
 
 
-
 class ThreadedFunction(object):
-    def __init__(self, f, **kwargs):
-        self.f = f
+    def __init__(self, function, prefetch_count, **kwargs):
+        """Parallelize a function to prefetch results using mutliple processes.
+
+        Args:
+            function: Function to be executed in parallel.
+            prefetch_count: Number of samples to prefetch.
+            kwargs: Keyword args passed to the executed function.
+        """
+        self.function = function
+        self.prefetch_count = prefetch_count
         self.kwargs = kwargs
-        self.next_output = None
-        self.lock = threading.Lock()
-        thread = threading.Thread(target=self._compute_next)
-        thread.start()
+        self.output_queue = multiprocessing.Queue(maxsize=prefetch_count)
+        self.procs = []
+        for i in range(self.prefetch_count):
+            p = multiprocessing.Process(
+                target=ThreadedFunction._compute_next,
+                args=(self.function, self.kwargs, self.output_queue))
+            p.daemon = True  # To ensure it is killed if the parent dies.
+            p.start()
+            self.procs.append(p)
+
+    def fill_status(self, normalize=False):
+        """Returns the fill status of the underlying queue.
+
+        Args:
+            normalize: If set to True, normalize the fill status by the max
+                queue size. Defaults to False.
+
+        Returns:
+            The possibly normalized fill status of the underlying queue.
+        """
+        return (self.output_queue.qsize() /
+            (self.output_queue.maxsize if normalize else 1))
 
     def __call__(self):
-        #Wait for the lock to be released, this implies self.next != None
-        self.lock.acquire()
-        output = self.next_output
-        self.next_output = None
+        """Obtain one of the prefetched results or wait for one.
 
-        thread = threading.Thread(target=self._compute_next)
-        thread.start()
-        self.lock.release()
+        Returns:
+            The output of the provided function and the given keyword args.
+        """
+        output = self.output_queue.get(block=True)
         return output
 
-    def _compute_next(self):
-        self.lock.acquire()
-        self.next_output = self.f(**self.kwargs)
-        self.lock.release()
+    def __del__(self):
+        """Signal the processes to stop and join them."""
+        for p in self.procs:
+            p.terminate()
+            p.join()
+
+    def _compute_next(function, kwargs, output_queue):
+        """Helper function to do the actual computation in a non_blockig way."""
+        while True:
+            output_queue.put(function(**kwargs))
