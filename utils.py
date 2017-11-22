@@ -167,6 +167,13 @@ class ThreadedFunction(object):
             p.join()
 
     def _compute_next(function, kwargs, output_queue):
-        """Helper function to do the actual computation in a non_blockig way."""
+        """Helper function to do the actual computation in a non_blockig way.
+        Since this will always run in a new process, we ignore the interrupt
+        signal for the processes. This should be handled by the parent process
+        which kills the children when the object is deleted.
+        Some more discussion can be found here:
+        https://stackoverflow.com/questions/1408356/keyboard-interrupts-with-pythons-multiprocessing-pool
+        """
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
         while True:
             output_queue.put(function(**kwargs))
