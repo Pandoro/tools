@@ -159,7 +159,7 @@ class Confusion(object):
 
         number_format : string or None (default: None)
             The format used to print percentages into the confusion matrix. When
-            not provided the numbers are not printed.
+            not provided the numbers are not printed. For example `{0:>7.2%}`.
 
         only_return_fig : bool (default: False)
             When set to true the figure is only returned. For example for saving
@@ -190,11 +190,11 @@ class Confusion(object):
         if number_format is not None:
             for r in range(0,self.class_count):
                 for c in range(0,self.class_count):
-                    ax[0].text(c, r, '{0:>7.2%}'.format(
+                    ax[0].text(c, r, number_format.format(
                         self.confusion_normalized_row[r,c]),
                         horizontalalignment='center',
                         verticalalignment='center', fontsize=10)
-                    ax[1].text(c, r, '{0:>7.2%}'.format(
+                    ax[1].text(c, r, number_format.format(
                         self.confusion_normalized_col[r,c]),
                         horizontalalignment='center',
                         verticalalignment='center', fontsize=10)
