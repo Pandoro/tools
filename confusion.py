@@ -146,16 +146,16 @@ class Confusion(object):
         self.finished_computation = False
 
 
-    def plot(self, colormap=None, add_numbers=False, return_fig=False):
+    def plot(self, colormap=None, number_format=None, only_return_fig=False):
         '''Create and plot a figure summarizing all information.
 
         colormap : mpl.cm (default: None)
             The colormap used to colorize the matrices. None results in mpl
             default to be used.
 
-        return_fig : bool (default: False)
-            When set to true the figure is also returned. (Useful when used
-            outside jupyter notebooks.)
+        only_return_fig : bool (default: False)
+            When set to true the figure is only returned. For example for saving
+            the figure or when using this outside of jupyter notebooks.
         '''
 
         #Compute the values in case this has not been done yet.
@@ -196,7 +196,8 @@ class Confusion(object):
         #A final line showing our three favorit scores.
         _ = fig.suptitle('Global:{0:.2%}, Average:{1:.2%}, IoU:{2:.2%}'.format(self.global_score, self.avg_score, self.avg_iou_score), fontsize=14, fontweight='bold', x = 0.4, y = 0.03)
 
-        if return_fig:
+        if only_return_fig:
+            plt.close()
             return fig
 
     def print_confusion_matrix(self, max_name_length=None):
