@@ -4,15 +4,17 @@ import matplotlib as mpl
 
 
 class Confusion(object):
+    '''Confusion matrix class including incremental confusion computation.
+
+    Instances of this class can be used to compute the confusion matrix
+    and other typical scores for semantic segmentation problems. Either
+    incrementally or in one call. All labels should be positive integers.
+    With the exception of a negative void label. Methods for plotting and
+    printing are included.
+    '''
+
     def __init__(self, label_names, void_label=-1, label_count=None):
-        '''Confusion matrix class fallowing for incremental confusion computation.
-
-        Instances of this class can be used to compute the confusion matrix
-        and other typical scores for semantic segmentation problems. Either
-        incrementally or in one call. All labels should be positive integers.
-        With the exception of a negative void label. Methods for plotting and
-        printing are included.
-
+        '''Inits a Confusion matrix with label names and the void label.
         Parameters
         ----------
         label_names : list of strings or None
@@ -36,7 +38,8 @@ class Confusion(object):
             self.label_names = (np.array(label_names).copy()).tolist()
         else:
             if label_count is None:
-                raise ValueError('Either label_names or label_count has to be specified.')
+                raise ValueError('Either label_names or label_count has to be '
+                                 'specified.')
             else:
                 self.label_names = [str(i) for i in range(label_count)]
 
@@ -47,7 +50,6 @@ class Confusion(object):
 
         self.class_count= len(self.label_names)
         self.reset()
-
 
     def reset(self):
         '''Reset all values to allow for a fresh computation.
@@ -60,7 +62,6 @@ class Confusion(object):
         self.avg_iou_score = 0
         self.finished_computation = False
 
-
     def finish(self):
         '''Computes all scores given the accumulated data.
         '''
@@ -72,13 +73,15 @@ class Confusion(object):
         union = self.gt_sum_per_class + self.sum_per_class - diag
         self.avg_score = np.nanmean(diag/self.gt_sum_per_class)
         self.avg_iou_score = np.nanmean(diag/union)
-        self.confusion_normalized_row = (self.confusion.copy().T/self.gt_sum_per_class.astype(np.float32)).T
-        self.confusion_normalized_col = self.confusion.copy()/self.sum_per_class.astype(np.float32)
+        self.confusion_normalized_row = (
+            self.confusion.copy().T/self.gt_sum_per_class.astype(np.float32)).T
+        self.confusion_normalized_col = (
+            self.confusion.copy()/self.sum_per_class.astype(np.float32))
 
         self.finished_computation = True
 
-
-    def incremental_update(self, gt, pred, allow_void_prediction=False, update_finished=True):
+    def incremental_update(self, gt, pred, allow_void_prediction=False,
+                           update_finished=True):
         '''Update the confusion matrix with the provided data.
 
         Given the ground truth and predictions the stored confusion matrix is
@@ -120,17 +123,19 @@ class Confusion(object):
             raise ValueError('Groundtruth and prediction shape missmatch')
 
         if not allow_void_prediction and self.void_label in pred:
-            raise ValueError('Void labels found in the predictions. \
-                               Fix the predictions, or set `allow_void_prediction` to True.')
+            raise ValueError('Void labels found in the predictions. Fix the '
+                             'predictions, or set `allow_void_prediction` to '
+                             'True.')
 
         if np.max(gt) >= self.class_count:
             raise ValueError('Labels in the groundturh exceed the class count.')
 
         if np.max(pred) >= self.class_count:
-            raise ValueError('Labels in the predictions exceed the class count.')
+            raise ValueError('Labels in the prediction exceed the class count.')
 
         if self.finished_computation and not update_finished:
-            raise Exception('You specified not to allow updates after computing scores.')
+            raise Exception('You specified not to allow updates after computing'
+                            ' scores.')
 
         gt_flat = gt.flatten().astype(np.int32)
         pred_flat = pred.flatten().astype(np.int32)
@@ -145,13 +150,16 @@ class Confusion(object):
 
         self.finished_computation = False
 
-
     def plot(self, colormap=None, number_format=None, only_return_fig=False):
         '''Create and plot a figure summarizing all information.
 
         colormap : mpl.cm (default: None)
             The colormap used to colorize the matrices. None results in mpl
             default to be used.
+
+        number_format : string or None (default: None)
+            The format used to print percentages into the confusion matrix. When
+            not provided the numbers are not printed.
 
         only_return_fig : bool (default: False)
             When set to true the figure is only returned. For example for saving
@@ -166,8 +174,11 @@ class Confusion(object):
         fig, ax = plt.subplots(1,2, figsize=(15,5.5), sharey=True, sharex=True)
 
         #Show the confusion matrices
-        ax[0].imshow(self.confusion_normalized_row*100, interpolation='nearest', cmap=colormap, vmin=0, vmax=100, aspect='auto')
-        im = ax[1].imshow(self.confusion_normalized_col*100, interpolation='nearest', cmap=colormap, vmin=0, vmax=100, aspect='auto')
+        ax[0].imshow(self.confusion_normalized_row*100, interpolation='nearest',
+                     cmap=colormap, vmin=0, vmax=100, aspect='auto')
+        im = ax[1].imshow(
+            self.confusion_normalized_col*100, interpolation='nearest',
+            cmap=colormap, vmin=0, vmax=100, aspect='auto')
 
         #Make a colorbar
         cax,kw = mpl.colorbar.make_axes([a for a in ax.flat])
@@ -176,25 +187,34 @@ class Confusion(object):
         ax[0].set_xticks(range(self.class_count))
 
         #Possibly add the numbers
-        if(add_numbers):
+        if number_format is not None:
             for r in range(0,self.class_count):
                 for c in range(0,self.class_count):
-                    ax[0].text(c, r, '{0:>7.2%}'.format(self.confusion_normalized_row[r,c]), horizontalalignment='center', verticalalignment='center', fontsize=10)
-                    ax[1].text(c, r, '{0:>7.2%}'.format(self.confusion_normalized_col[r,c]), horizontalalignment='center', verticalalignment='center', fontsize=10)
+                    ax[0].text(c, r, '{0:>7.2%}'.format(
+                        self.confusion_normalized_row[r,c]),
+                        horizontalalignment='center',
+                        verticalalignment='center', fontsize=10)
+                    ax[1].text(c, r, '{0:>7.2%}'.format(
+                        self.confusion_normalized_col[r,c]),
+                        horizontalalignment='center',
+                        verticalalignment='center', fontsize=10)
 
-        #Add the names
-        _ = ax[0].set_yticklabels(self.label_names)
+        # Add the names
+        ax[0].set_yticklabels(self.label_names)
         ax[0].xaxis.tick_top()
-        _ = ax[0].set_xticklabels(self.label_names, rotation='vertical')
+        ax[0].set_xticklabels(self.label_names, rotation='vertical')
         ax[1].xaxis.tick_top()
-        _ = ax[1].set_xticklabels(self.label_names, rotation='vertical')
+        ax[1].set_xticklabels(self.label_names, rotation='vertical')
 
-        #Labels for Row vs Column normalized
-        _ = ax[0].set_title('Row normalized', horizontalalignment='center', y=-0.1)
-        _ = ax[1].set_title('Column normalized', horizontalalignment='center', y=-0.1)
+        # Labels for Row vs Column normalized
+        ax[0].set_title('Row normalized', horizontalalignment='center', y=-0.1)
+        ax[1].set_title(
+            'Column normalized', horizontalalignment='center', y=-0.1)
 
-        #A final line showing our three favorit scores.
-        _ = fig.suptitle('Global:{0:.2%}, Average:{1:.2%}, IoU:{2:.2%}'.format(self.global_score, self.avg_score, self.avg_iou_score), fontsize=14, fontweight='bold', x = 0.4, y = 0.03)
+        # A final line showing our three favorite scores.
+        fig.suptitle('Global:{0:.2%}, Average:{1:.2%}, IoU:{2:.2%}'.format(
+            self.global_score, self.avg_score, self.avg_iou_score), fontsize=14,
+            fontweight='bold', x = 0.4, y = 0.03)
 
         if only_return_fig:
             plt.close()
@@ -218,7 +238,8 @@ class Confusion(object):
         if not self.finished_computation:
             self.finish()
 
-        line = '{:>' + str(max_name_length) + 's}, ' + ', '.join(['{:>7.2%}']*self.class_count)
+        line = ('{:>' + str(max_name_length) + 's}, ' +
+            ', '.join(['{:>7.2%}'] * self.class_count))
         for l, conf in zip(label_names_cropped, self.confusion_normalized_row):
             print(line.format(l, *(conf.tolist())))
 
