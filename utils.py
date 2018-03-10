@@ -149,7 +149,7 @@ class ThreadedFunction(object):
             The possibly normalized fill status of the underlying queue.
         """
         return (self.output_queue.qsize() /
-            (self.output_queue.maxsize if normalize else 1))
+            (self.prefetch_count if normalize else 1))
 
     def __call__(self):
         """Obtain one of the prefetched results or wait for one.
