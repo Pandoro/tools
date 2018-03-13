@@ -117,12 +117,16 @@ class Uninterrupt(object):
 
 
 class ThreadedFunction(object):
-    def __init__(self, function, prefetch_count, **kwargs):
+    def __init__(self, function, prefetch_count, reseed_numpy=True, **kwargs):
         """Parallelize a function to prefetch results using mutliple processes.
 
         Args:
             function: Function to be executed in parallel.
             prefetch_count: Number of samples to prefetch.
+            reseed_numpy: A bool specifying if `numpy.random.seed()` is called
+                before the infinite loop is started. By default the state is
+                copied from the parent process thus resulting in duplicates
+                for each thread. Defaults to `True`.
             kwargs: Keyword args passed to the executed function.
         """
         self.function = function
@@ -133,7 +137,7 @@ class ThreadedFunction(object):
         for i in range(self.prefetch_count):
             p = multiprocessing.Process(
                 target=ThreadedFunction._compute_next,
-                args=(self.function, self.kwargs, self.output_queue))
+                args=(self.function, self.kwargs, self.output_queue, reseed_numpy))
             p.daemon = True  # To ensure it is killed if the parent dies.
             p.start()
             self.procs.append(p)
@@ -166,7 +170,7 @@ class ThreadedFunction(object):
             p.terminate()
             p.join()
 
-    def _compute_next(function, kwargs, output_queue):
+    def _compute_next(function, kwargs, output_queue, reseed_numpy):
         """Helper function to do the actual computation in a non_blockig way.
         Since this will always run in a new process, we ignore the interrupt
         signal for the processes. This should be handled by the parent process
@@ -175,5 +179,7 @@ class ThreadedFunction(object):
         https://stackoverflow.com/questions/1408356/keyboard-interrupts-with-pythons-multiprocessing-pool
         """
         signal.signal(signal.SIGINT, signal.SIG_IGN)
+        if reseed_numpy:  # By default the random state is copied across processes.
+            np.random.seed()
         while True:
             output_queue.put(function(**kwargs))
